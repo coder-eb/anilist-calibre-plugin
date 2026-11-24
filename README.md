@@ -52,13 +52,16 @@ AniList is a free community service, so this plugin asks as little of it as it c
 - **Opening Sync = at most one request.** All linked series are looked up together (AniList allows 50
   per request), and only series that actually have a chapter to send are included. 13 linked series:
   1 request, not 13.
-- **A series that was already sent is not looked up again** until its chapter goes above what was sent
-  (progress is never lowered, so there is nothing to change). Nothing new anywhere = 0 requests.
+- **AniList is asked about a series once, then remembered.** The plugin notes the chapter AniList is
+  known to have (from a lookup or from what it pushed) and does not ask again until your chapter goes
+  above it (progress is never lowered, so there is nothing to change). Nothing new anywhere = 0 requests.
 - **No token = 0 requests** (preview only). Typing or pasting a link sends nothing; only the
   "Check on AniList" button does (1 request).
-- **Pushing sends only changed series**, one request each, at least 0.7 s apart, chapters only.
+- **Pushing sends only changed series**, one request each, at least 2 s apart (30 a minute), chapters only.
 - **If AniList answers 429 (slow down) the whole batch stops**: it honours `Retry-After`, makes at most
   3 retries, and does not go on to the next series. Server errors back off 2 s, 4 s, 6 s.
+- **No test or CI step ever contacts AniList**: the tests use a fake, and real network access is blocked
+  inside them so an accidental call fails loudly.
 - Requests identify themselves (`anilist-calibre-plugin/<version>` with the repository URL).
 - Interactive checks have an 8 s timeout so Calibre never hangs on a bad connection.
 

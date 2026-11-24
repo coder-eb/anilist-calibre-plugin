@@ -57,8 +57,8 @@ class AniListAction(InterfaceAction):
             return info_dialog(self.gui, 'AniList', 'No manga series has an AniList link yet.\n\n'
                                'Select a volume and use  AniList > Link to AniList...', show=True)
         token = PREFS['token']
-        # Gentle on AniList: at most one request every 0.7 s, a request only for series with news.
-        engine = sync.Engine(AniListClient(token, min_interval=0.7), planner.Options(
+        # Gentle on AniList: at most 30 requests a minute (one per 2 s), and only for series with news.
+        engine = sync.Engine(AniListClient(token, min_interval=2.0), planner.Options(
             count_in_progress=PREFS['count_in_progress'], update_inactive=PREFS['update_inactive']))
         column = PREFS['chapter_column']
         if column and column not in self.api.field_metadata.all_field_keys():
@@ -78,11 +78,14 @@ class AniListAction(InterfaceAction):
             if plan.current_progress is not None and target < plan.current_progress:
                 raise ValueError('refusing to lower AniList progress')
             plan.target = target
-            saved = engine.apply(plan)
-            pushed = dict(PREFS['pushed'])
-            pushed[str(plan.anilist_id)] = target
-            PREFS['pushed'] = pushed                  # next time: no lookup unless there is news
-            return saved
+            return engine.apply(plan)
+
+        def remember_fn(anilist_id, chapter):
+            # AniList has at least this chapter: next time, no lookup unless there is news.
+            known = dict(PREFS['pushed'])
+            if known.get(str(anilist_id), -1) < chapter:
+                known[str(anilist_id)] = chapter
+                PREFS['pushed'] = known
 
         def write_fn(values):
             changed = ops.write_chapter_column(self.api, column, values)
@@ -90,7 +93,7 @@ class AniListAction(InterfaceAction):
             return len(changed)
 
         dlg = SyncDialog(self.gui, linked, plan_fn, push_fn, write_fn, bool(token), column,
-                         icon=self.qaction.icon())
+                         icon=self.qaction.icon(), remember_fn=remember_fn)
         dlg.exec()
         dlg.deleteLater()                              # do not leave a hidden dialog under the main window
 

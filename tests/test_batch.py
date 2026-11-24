@@ -4,6 +4,8 @@ import types
 import unittest
 from pathlib import Path
 
+import nonet  # noqa: F401  (blocks real network access in tests)
+
 pkg = types.ModuleType('ams_test3')
 pkg.__path__ = [str(Path(__file__).resolve().parents[1] / 'anilist_manga_sync')]
 sys.modules[pkg.__name__] = pkg
@@ -162,12 +164,12 @@ class GentleTests(unittest.TestCase):
     def engine(self, t):
         return sync.Engine(anilist.AniListClient('tok', transport=t))
 
-    def test_series_already_sent_are_not_looked_up(self):
+    def test_series_already_known_are_not_looked_up(self):
         t = Counting()
         plans = self.engine(t).plan_all([linked_item('a', 1, rng='1-8')], known_pushed={1: 8})
         self.assertEqual(t.calls, [])                              # zero requests
         self.assertEqual(plans[0].action, 'skip')
-        self.assertIn('already sent chapter 8', plans[0].reason)
+        self.assertIn('already had chapter 8', plans[0].reason)
         self.assertFalse(plans[0].will_push)
 
     def test_news_is_looked_up_even_if_something_was_sent_before(self):

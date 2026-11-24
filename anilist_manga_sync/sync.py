@@ -67,9 +67,10 @@ class Engine(object):
         actually have a chapter to send are looked up on AniList, all in one batched request
         (50 per request); with nothing to send, or no token, no request is made at all.
 
-        ``known_pushed`` is ``{anilist_id: chapter}`` this plugin has already sent. A series whose
-        chapter is not above that is treated as up to date *without asking AniList*: progress is never
-        lowered, so there is nothing to change and nothing worth a request.
+        ``known_pushed`` is ``{anilist_id: chapter}`` AniList is known to have already (from what this
+        plugin sent, or from an earlier lookup). A series whose chapter is not above that is treated as
+        up to date *without asking AniList*: progress is never lowered, so there is nothing to change
+        and nothing worth a request.
         """
         known_pushed = known_pushed or {}
         prepared = []
@@ -83,7 +84,7 @@ class Engine(object):
             sent = known_pushed.get(anilist_id)
             if fetch_entries and anilist_id and local.target and sent is not None and local.target <= sent:
                 local.action = 'skip'
-                local.reason = 'already sent chapter %d (not re-checked on AniList)' % sent
+                local.reason = 'AniList already had chapter %d when last checked (not asked again)' % sent
                 local.target = sent
         need = [anilist_id for _s, _v, anilist_id, local in prepared
                 if anilist_id and local.target and local.action != 'skip']

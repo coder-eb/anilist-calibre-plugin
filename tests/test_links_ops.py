@@ -4,6 +4,8 @@ import types
 import unittest
 from pathlib import Path
 
+import nonet  # noqa: F401  (blocks real network access in tests)
+
 pkg = types.ModuleType('ams_test2')
 pkg.__path__ = [str(Path(__file__).resolve().parents[1] / 'anilist_manga_sync')]
 sys.modules[pkg.__name__] = pkg

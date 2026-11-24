@@ -89,7 +89,7 @@ def main(argv=None):
     series_map = sync.group_by_series(records)
     if args.series:
         series_map = {k: v for k, v in series_map.items() if args.series.casefold() in k.casefold()}
-    client = AniListClient(args.token, min_interval=0.7 if args.apply else 0.0)
+    client = AniListClient(args.token, min_interval=2.0 if args.apply else 0.0)
     engine = sync.Engine(client, planner.Options(count_in_progress=args.count_in_progress))
 
     try:

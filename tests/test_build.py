@@ -4,6 +4,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
+import nonet  # noqa: F401  (blocks real network access in tests)
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('build_plugin', ROOT / 'scripts' / 'build_plugin.py')
 build_plugin = importlib.util.module_from_spec(spec)

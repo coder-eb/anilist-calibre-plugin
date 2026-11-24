@@ -141,7 +141,7 @@ def status_of(plan, has_token):
     if plan.action == 'preview':
         return 'preview', 'Preview'
     if plan.action == 'skip':
-        if (plan.reason or '').startswith('AniList is already'):
+        if 'already' in (plan.reason or ''):
             return 'uptodate', 'Up to date'
         return 'skipped', 'Skipped'
     if plan.action == 'unlinked':
@@ -164,13 +164,17 @@ class SyncDialog(QDialog):
     ``plan_fn``   (items) -> [SeriesPlan]          one call; makes at most one batched AniList request
     ``push_fn``   (plan, target) -> saved entry    (runs in a worker thread)
     ``write_fn``  ({book_id: chapter}) -> number written (runs on the GUI thread)
+    ``remember_fn`` (anilist_id, chapter) called on the GUI thread whenever AniList is seen to have at
+                  least that chapter (from a lookup or a successful push), so it need not be asked again
     """
 
-    def __init__(self, parent, items, plan_fn, push_fn, write_fn, has_token, chapter_column, icon=None):
+    def __init__(self, parent, items, plan_fn, push_fn, write_fn, has_token, chapter_column, icon=None,
+                 remember_fn=None):
         super().__init__(parent)
         self.setWindowTitle('Sync Manga Progress')
         self.items, self.plan_fn, self.push_fn, self.write_fn = items, plan_fn, push_fn, write_fn
         self.has_token = has_token
+        self.remember_fn = remember_fn
         self.plans = [None] * len(items)
         self.state = ['planning'] * len(items)          # per-row status key
         self.pushed = 0
@@ -339,6 +343,9 @@ class SyncDialog(QDialog):
             return
         self.table.setSortingEnabled(False)
         self.plans = list(plans)
+        for plan in self.plans:
+            if plan is not None and plan.anilist_id and plan.current_progress is not None:
+                self._remember(plan.anilist_id, plan.current_progress)
         for i, plan in enumerate(self.plans):
             row = self._row_of(i)
             key, text = status_of(plan, self.has_token)
@@ -374,6 +381,13 @@ class SyncDialog(QDialog):
         self.summary.setText('%d series to push.' % n if self.has_token else 'Preview ready.')
         if self.table.rowCount():
             self.table.selectRow(0)
+
+    def _remember(self, anilist_id, chapter):
+        if self.remember_fn is not None:
+            try:
+                self.remember_fn(anilist_id, chapter)
+            except Exception:                       # a failed note-to-self must never break a sync
+                pass
 
     # -- editing and selection -------------------------------------------------------------
     def _edited(self, item):
@@ -456,6 +470,8 @@ class SyncDialog(QDialog):
             self.table.item(row, C_NOTE).setText(err)
         else:
             self.pushed += 1
+            if saved.get('progress') is not None:
+                self._remember(self.plans[i].anilist_id, saved['progress'])
             self._set_status(i, 'done', 'Done', checkable=False, checked=False)
             self.table.item(row, C_NOTE).setText('pushed: chapter %s (%s)' % (
                 saved.get('progress'), (saved.get('status') or '').replace('_', ' ').lower()))

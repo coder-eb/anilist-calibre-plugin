@@ -10,8 +10,18 @@ Uses a copy of the library's metadata.db and a fake AniList: nothing real is rea
 (apart from the "Test token" button, which is pointed at the fake too).
 """
 import json
+import socket
 import sys
 import time
+import urllib.request
+
+
+def _blocked(*a, **k):
+    raise AssertionError('the integration test tried to use the real network')
+
+
+urllib.request.urlopen = _blocked        # everything must go through the fake AniList below
+socket.create_connection = _blocked
 
 from qt.core import QAction, QApplication, QMainWindow, Qt
 
@@ -151,14 +161,16 @@ def push_fn(plan, target):
     if plan.current_progress is not None and target < plan.current_progress:
         raise ValueError('refusing to lower AniList progress')
     plan.target = target
-    saved = make_engine().apply(plan)
-    pushed_memory[plan.anilist_id] = target
-    return saved
+    return make_engine().apply(plan)
+
+
+def remember(aid, chapter):
+    pushed_memory[aid] = max(pushed_memory.get(aid, -1), chapter)
 
 
 # ---- 1) opening the dialog: ONE batched request for 13 series -----------------------------
 requests.clear(); saves.clear()
-sd = SyncDialog(None, linked, plan_fn, push_fn, write_fn, True, column)
+sd = SyncDialog(None, linked, plan_fn, push_fn, write_fn, True, column, remember_fn=remember)
 check(wait_until(lambda: sd.sync_btn.isEnabled()), 'sync dialog: planning finished')
 check(count('batch') == 1 and count('save') == 0 and len(requests) == 1,
       'AniList load: opening the dialog made exactly %d request (for %d linked series)' % (len(requests), len(linked)))
@@ -215,13 +227,15 @@ sd.done_waiting()
 
 # ---- 3) opening it again: what was sent is not looked up again ----------------------------
 requests.clear()
-sd2 = SyncDialog(None, linked, plan_fn, push_fn, write_fn, True, column)
+sd2 = SyncDialog(None, linked, plan_fn, push_fn, write_fn, True, column, remember_fn=remember)
 check(wait_until(lambda: sd2.sync_btn.isEnabled()), 'repeat: planning finished')
 asked2 = requests[0][1]['ids'] if requests else []
-check(not (set(asked2) & set(pushed_memory)), 'repeat: series already sent are NOT asked about again (%d known, %d asked)' % (len(pushed_memory), len(asked2)))
+done_ids = {sd.plans[i].anilist_id for i, k in enumerate(sd.state) if k == 'done'}
+check(done_ids and not (set(asked2) & done_ids),
+      'repeat: the series just pushed are NOT asked about again (%d pushed, %d asked)' % (len(done_ids), len(asked2)))
 check(len(requests) <= 1, 'repeat: at most one request (%d)' % len(requests))
-sent_rows = [sd2.table.item(r, C_NOTE).text() for r in range(sd2.table.rowCount()) if 'already sent' in sd2.table.item(r, C_NOTE).text()]
-check(len(sent_rows) == len(pushed_memory), 'repeat: those rows say "already sent ... not re-checked" (%d)' % len(sent_rows))
+sent_rows = [sd2.table.item(r, C_NOTE).text() for r in range(sd2.table.rowCount()) if 'already had' in sd2.table.item(r, C_NOTE).text()]
+check(len(sent_rows) >= 1, 'repeat: those rows say "AniList already had chapter N ... not asked again" (%d)' % len(sent_rows))
 sd2.done_waiting()
 
 # ---- 4) nothing new anywhere -> zero requests ---------------------------------------------
@@ -234,7 +248,7 @@ plans = plan_fn(linked)
 check(requests == [], 'nothing new: opening the dialog sends ZERO requests (%d series checked locally)' % len(plans))
 
 # the column values are really in the database
-sd3 = SyncDialog(None, linked, plan_fn, push_fn, write_fn, True, column)
+sd3 = SyncDialog(None, linked, plan_fn, push_fn, write_fn, True, column, remember_fn=remember)
 wait_until(lambda: sd3.sync_btn.isEnabled())
 sd3._after_push()
 db.close()
@@ -247,6 +261,23 @@ check(rows_db.get(107) == 26 and rows_db.get(114) == 18, 'database: vol 3 = 26, 
 check(rows_db.get(84) == written.get(84) and rows_db.get(84) not in (None, 0), 'database: a linked volume gets its computed chapter (Kimi #18 -> %s)' % rows_db.get(84))
 con.close()
 sd3.done_waiting()
+
+# ---- 5) the gap found by the user: a lookup alone (nothing pushed) must be remembered ------------
+pushed_memory.clear()
+NOW[169355] = 26                      # AniList already has chapter 26: nothing to push
+requests.clear()
+sd5 = SyncDialog(None, [i for i in linked if i[0] == 'Kagurabachi'], plan_fn, push_fn, write_fn, True, column, remember_fn=remember)
+check(wait_until(lambda: sd5.sync_btn.isEnabled()), 'learn: first open finished')
+check(count('batch') == 1, 'learn: first open asked AniList once (%d)' % count('batch'))
+check(sd5.table.item(0, C_STATUS).text() == 'Up to date', 'learn: Kagurabachi shows "Up to date"')
+check(pushed_memory.get(169355) == 26, 'learn: AniList\'s chapter (26) was remembered even though nothing was pushed (%s)' % pushed_memory)
+sd5.done_waiting()
+requests.clear()
+sd6 = SyncDialog(None, [i for i in linked if i[0] == 'Kagurabachi'], plan_fn, push_fn, write_fn, True, column, remember_fn=remember)
+check(wait_until(lambda: sd6.sync_btn.isEnabled()), 'learn: second open finished')
+check(requests == [], 'learn: second open sent ZERO requests (%d)' % len(requests))
+check(sd6.table.item(0, C_STATUS).text() == 'Up to date', 'learn: ... and still shows "Up to date"')
+sd6.done_waiting()
 
 # ---- push_fn never lowers; no token = preview only ----------------------------------------
 plan = next(p for p in plans if p.series == 'Kagurabachi')
