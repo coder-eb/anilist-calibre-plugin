@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the Calibre plugin zip.
 
-The zip is flat: the files in ``calibre_plugin/`` plus the shared, Calibre-free modules from
+The zip holds the files in ``calibre_plugin/`` (icons under ``images/``) plus the shared, Calibre-free modules from
 ``anilist_manga_sync/`` (listed in SHARED). The build fails if any module the plugin imports
 is missing from the zip, so a forgotten file cannot ship silently.
 
@@ -32,6 +32,11 @@ def plugin_version():
 def collect():
     files = [(p.name, p) for p in sorted(PLUGIN_DIR.iterdir())
              if p.is_file() and p.suffix != '.pyc' and p.name != '.DS_Store']
+    # Icons live in images/ inside the zip (Calibre's get_icons('images/x.png') reads from there).
+    images = PLUGIN_DIR / 'images'
+    if images.is_dir():
+        files += [('images/' + p.name, p) for p in sorted(images.iterdir())
+                  if p.is_file() and p.suffix in ('.png', '.svg')]
     files += [('%s.py' % m, SHARED_DIR / ('%s.py' % m)) for m in SHARED]
     names = [n for n, _ in files]
     dupes = {n for n in names if names.count(n) > 1}

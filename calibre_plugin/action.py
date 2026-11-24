@@ -10,11 +10,15 @@ from .dialogs import LinkDialog, SyncDialog
 
 class AniListAction(InterfaceAction):
     name = 'AniList Manga Sync'
-    action_spec = ('AniList', 'sync.png', 'Sync manga reading progress to AniList', None)
+    action_spec = ('AniList', None, 'Sync manga reading progress to AniList', None)
     popup_type = QToolButton.ToolButtonPopupMode.InstantPopup
     action_type = 'current'
 
     def genesis(self):
+        try:
+            self.qaction.setIcon(get_icons('images/anilist.png', 'AniList Manga Sync'))  # noqa: F821
+        except Exception:
+            pass                                    # no icon is better than no plugin
         self.menu = QMenu(self.gui)
         self.qaction.setMenu(self.menu)
         self.menu.addAction('Sync manga progress...').triggered.connect(self.sync_progress)
@@ -53,7 +57,8 @@ class AniListAction(InterfaceAction):
             return info_dialog(self.gui, 'AniList', 'No manga series has an AniList link yet.\n\n'
                                'Select a volume and use  AniList > Link to AniList...', show=True)
         token = PREFS['token']
-        engine = sync.Engine(AniListClient(token), planner.Options(
+        # Gentle on AniList: at most one request every 0.7 s, a request only for series with news.
+        engine = sync.Engine(AniListClient(token, min_interval=0.7), planner.Options(
             count_in_progress=PREFS['count_in_progress'], update_inactive=PREFS['update_inactive']))
         column = PREFS['chapter_column']
         if column and column not in self.api.field_metadata.all_field_keys():
@@ -63,21 +68,31 @@ class AniListAction(InterfaceAction):
                          'plugin settings.' % column, show=True)
             column = ''
 
-        def plan_fn(series, series_recs):
-            return engine.plan(series, series_recs, fetch_entry=bool(token))
+        def known_pushed():
+            return {int(k): v for k, v in dict(PREFS['pushed']).items()}
+
+        def plan_fn(items):
+            return engine.plan_all(items, fetch_entries=bool(token), known_pushed=known_pushed())
 
         def push_fn(plan, target):
             if plan.current_progress is not None and target < plan.current_progress:
                 raise ValueError('refusing to lower AniList progress')
             plan.target = target
-            return engine.apply(plan)
+            saved = engine.apply(plan)
+            pushed = dict(PREFS['pushed'])
+            pushed[str(plan.anilist_id)] = target
+            PREFS['pushed'] = pushed                  # next time: no lookup unless there is news
+            return saved
 
         def write_fn(values):
             changed = ops.write_chapter_column(self.api, column, values)
             self._refresh(changed)
             return len(changed)
 
-        SyncDialog(self.gui, linked, plan_fn, push_fn, write_fn, bool(token), column).exec()
+        dlg = SyncDialog(self.gui, linked, plan_fn, push_fn, write_fn, bool(token), column,
+                         icon=self.qaction.icon())
+        dlg.exec()
+        dlg.deleteLater()                              # do not leave a hidden dialog under the main window
 
     # -- Link to AniList -------------------------------------------------------------------
     def link_books(self):
@@ -90,10 +105,13 @@ class AniListAction(InterfaceAction):
         what = ('"%s"' % api.field_for('title', ids[0])) if len(ids) == 1 else '%d books' % len(ids)
         dlg = LinkDialog(self.gui, 'Link %s to an AniList manga.' % what,
                          links.page_url(current[0]) if len(current) == 1 else '',
-                         AniListClient(PREFS['token']).media, has_series)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+                         AniListClient(PREFS['token'], timeout=8).media, has_series)
+        accepted = dlg.exec() == QDialog.DialogCode.Accepted
+        result = dlg.result_link()
+        dlg.deleteLater()
+        if not accepted:
             return
-        anilist_id, whole_series = dlg.result_link()
+        anilist_id, whole_series = result
         targets = ops.series_siblings(api, ids) if whole_series else ids
         if anilist_id is None:
             if not question_dialog(self.gui, 'Remove link', 'Remove the AniList link from %d book(s)?' % len(targets)):

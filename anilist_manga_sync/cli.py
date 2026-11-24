@@ -89,7 +89,7 @@ def main(argv=None):
     series_map = sync.group_by_series(records)
     if args.series:
         series_map = {k: v for k, v in series_map.items() if args.series.casefold() in k.casefold()}
-    client = AniListClient(args.token)
+    client = AniListClient(args.token, min_interval=0.7 if args.apply else 0.0)
     engine = sync.Engine(client, planner.Options(count_in_progress=args.count_in_progress))
 
     try:
@@ -97,10 +97,9 @@ def main(argv=None):
             who = client.viewer()
             print('AniList account: %s\n' % who.get('name', '?'))
         pushed = 0
-        for series, recs in series_map.items():
-            if sync.anilist_id_for(recs) is None:
-                continue                                    # only linked series are ever touched
-            plan = engine.plan(series, recs, fetch_entry=bool(args.token))
+        linked = [(s, r) for s, r in series_map.items() if sync.anilist_id_for(r) is not None]
+        # only linked series are ever touched; one batched AniList request covers all of them
+        for (series, recs), plan in zip(linked, engine.plan_all(linked, fetch_entries=bool(args.token))):
             print('\n'.join(describe(plan)))
             print('    => %s: target chapter %s (%s)' % (plan.action.upper(), plan.target or '-', plan.reason))
             for w in plan.warnings:

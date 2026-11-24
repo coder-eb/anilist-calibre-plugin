@@ -6,6 +6,7 @@ the plugin settings. Reading/searching public data needs no token; changing
 your list does.
 """
 
+import functools
 import json
 import time
 
@@ -42,6 +43,18 @@ query($id: Int) {
   }
 }'''
 
+# Up to 50 series' entries in ONE request (AniList's page-size limit), instead of one request each.
+ENTRIES_QUERY = '''
+query($ids: [Int], $perPage: Int) {
+  Page(perPage: $perPage) {
+    media(id_in: $ids, type: MANGA) {
+      id chapters volumes status
+      mediaListEntry { id status progress progressVolumes }
+    }
+  }
+}'''
+BATCH_SIZE = 50
+
 VIEWER_QUERY = 'query { Viewer { id name } }'
 
 SAVE_MUTATION = '''
@@ -61,6 +74,11 @@ class AuthError(AniListError):
     """Missing, invalid or expired token."""
 
 
+class RateLimited(AniListError):
+    """AniList said slow down (HTTP 429) and kept saying it: stop sending, do not try the next item."""
+    abort_batch = True
+
+
 def display_title(media):
     t = media.get('title') or {}
     return t.get('english') or t.get('romaji') or t.get('native') or str(media.get('id'))
@@ -68,11 +86,19 @@ def display_title(media):
 
 class AniListClient(object):
     def __init__(self, token=None, transport=urllib_transport, sleep=time.sleep,
-                 max_retries=3):
+                 max_retries=3, timeout=None, min_interval=0.0, clock=time.monotonic):
+        """``timeout`` (seconds) applies to the default transport: use a short one for calls a person
+        is waiting on. ``min_interval`` spaces requests out so a burst of pushes stays well inside
+        AniList's rate limit."""
         self.token = (token or '').strip() or None
+        if timeout and transport is urllib_transport:
+            transport = functools.partial(urllib_transport, timeout=timeout)
         self.transport = transport
         self.sleep = sleep
         self.max_retries = max_retries
+        self.min_interval = min_interval
+        self.clock = clock
+        self._last_request = None
 
     def _post(self, query, variables, auth=False):
         headers = {'Content-Type': 'application/json', 'Accept': 'application/json',
@@ -83,6 +109,11 @@ class AniListClient(object):
             headers['Authorization'] = 'Bearer ' + self.token
         body = json.dumps({'query': query, 'variables': variables}).encode('utf-8')
         for attempt in range(self.max_retries + 1):
+            if self.min_interval and self._last_request is not None:
+                wait = self._last_request + self.min_interval - self.clock()
+                if wait > 0:
+                    self.sleep(wait)
+            self._last_request = self.clock()
             status, resp_headers, text = self.transport('POST', API_URL, body, headers)
             if status == 429 and attempt < self.max_retries:
                 wait = 5
@@ -106,7 +137,7 @@ class AniListClient(object):
                                 for e in data.get('errors') or []):
             raise AuthError('AniList rejected the token - create a new one in the plugin settings')
         if status == 429:
-            raise AniListError('AniList rate limit hit; try again in a minute')
+            raise RateLimited('AniList is busy (rate limit); nothing more was sent. Try again in a few minutes.')
         if data.get('errors'):
             raise AniListError('; '.join(e.get('message') or 'error' for e in data['errors']))
         if status != 200:
@@ -121,6 +152,20 @@ class AniListClient(object):
     def media(self, media_id):
         """Public details of a manga (no token needed); {} if it does not exist."""
         return self._post(MEDIA_QUERY, {'id': int(media_id)}).get('Media') or {}
+
+    def entries(self, media_ids):
+        """``{media_id: media}`` (with ``mediaListEntry``) for many series, 50 per request.
+
+        Ids that are not manga / do not exist are simply absent from the result.
+        """
+        ids = list(dict.fromkeys(int(i) for i in media_ids))
+        out = {}
+        for start in range(0, len(ids), BATCH_SIZE):
+            chunk = ids[start:start + BATCH_SIZE]
+            data = self._post(ENTRIES_QUERY, {'ids': chunk, 'perPage': BATCH_SIZE}, auth=True)
+            for media in (data.get('Page') or {}).get('media') or []:
+                out[media['id']] = media
+        return out
 
     def viewer(self):
         return self._post(VIEWER_QUERY, {}, auth=True).get('Viewer') or {}

@@ -19,9 +19,11 @@ class BuildTests(unittest.TestCase):
             out, names = build_plugin.build(Path(d) / 'x.zip')
             with zipfile.ZipFile(out) as z:
                 self.assertEqual(sorted(z.namelist()), sorted(names))
-                self.assertFalse([n for n in z.namelist() if '/' in n])
+                # flat, except the icons under images/
+                self.assertFalse([n for n in z.namelist() if '/' in n and not n.startswith('images/')])
         for needed in ('__init__.py', 'action.py', 'dialogs.py', 'config.py', 'anilist.py', 'sync.py',
-                       'planner.py', 'ops.py', 'links.py', 'plugin-import-name-anilist_calibre_plugin.txt'):
+                       'planner.py', 'ops.py', 'links.py', 'images/anilist.png',
+                       'plugin-import-name-anilist_calibre_plugin.txt'):
             self.assertIn(needed, names)
 
     def test_no_module_the_plugin_imports_is_missing(self):

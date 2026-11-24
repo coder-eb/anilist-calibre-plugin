@@ -15,6 +15,7 @@ PREFS.defaults['range_column'] = '#manga_chapters'
 PREFS.defaults['chapter_column'] = '#manga_chapter_read'
 PREFS.defaults['count_in_progress'] = False
 PREFS.defaults['update_inactive'] = False
+PREFS.defaults['pushed'] = {}      # {anilist id: last chapter this plugin sent}, saves needless lookups
 
 AUTH_URL = 'https://anilist.co/api/v2/oauth/authorize?client_id=%s&response_type=token'
 
@@ -88,7 +89,7 @@ class ConfigWidget(QWidget):
             return
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            who = AniListClient(token).viewer()
+            who = AniListClient(token, timeout=8).viewer()
             self.test_result.setText('Signed in to AniList as %s.' % who.get('name', '?'))
         except AniListError as exc:
             self.test_result.setText('Failed: %s' % exc)
