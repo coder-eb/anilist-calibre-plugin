@@ -1,6 +1,8 @@
-__pycache__/
 *.pyc
 *.zip
-.venv/
-.pytest_cache/
 .DS_Store
+.pytest_cache/
+.venv/
+__pycache__/
+build/
+dist/

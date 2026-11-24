@@ -1,0 +1,37 @@
+# Runs on every push to main and on pull requests: tests, then builds the plugin zip and
+# attaches it to the run as a downloadable artifact. (Releases are separate: see release.yml.)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # The Calibre-in-Calibre integration test (tests/integration_plugin.py) needs Calibre itself,
+      # so it is not run here; the unit tests cover everything else.
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build plugin zip
+        run: |
+          python scripts/build_plugin.py
+          echo "VERSION=$(python scripts/build_plugin.py --version)" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AniList-Manga-Sync-${{ env.VERSION }}-${{ github.sha }}
+          path: dist/AniList-Manga-Sync.zip
+          if-no-files-found: error

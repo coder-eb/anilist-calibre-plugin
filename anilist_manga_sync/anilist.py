@@ -34,6 +34,14 @@ query($id: Int) {
   }
 }'''
 
+MEDIA_QUERY = '''
+query($id: Int) {
+  Media(id: $id, type: MANGA) {
+    id format status chapters volumes
+    title { romaji english native }
+  }
+}'''
+
 VIEWER_QUERY = 'query { Viewer { id name } }'
 
 SAVE_MUTATION = '''
@@ -109,6 +117,10 @@ class AniListClient(object):
         """Manga matching ``title`` (MANGA format only: no novels or one-shots)."""
         data = self._post(SEARCH_QUERY, {'search': title, 'perPage': per_page})
         return (data.get('Page') or {}).get('media') or []
+
+    def media(self, media_id):
+        """Public details of a manga (no token needed); {} if it does not exist."""
+        return self._post(MEDIA_QUERY, {'id': int(media_id)}).get('Media') or {}
 
     def viewer(self):
         return self._post(VIEWER_QUERY, {}, auth=True).get('Viewer') or {}
