@@ -15,6 +15,7 @@ PREFS.defaults['range_column'] = '#manga_chapters'
 PREFS.defaults['chapter_column'] = '#manga_chapter_read'
 PREFS.defaults['count_in_progress'] = False
 PREFS.defaults['update_inactive'] = False
+PREFS.defaults['auto_prompt'] = True      # offer a sync after Kobo Utilities stores new reading positions
 PREFS.defaults['pushed'] = {}      # {anilist id: chapter AniList is known to have}, saves needless lookups
 
 AUTH_URL = 'https://anilist.co/api/v2/oauth/authorize?client_id=%s&response_type=token'
@@ -72,6 +73,9 @@ class ConfigWidget(QWidget):
         self.count_in_progress.setChecked(PREFS['count_in_progress'])
         self.update_inactive = QCheckBox('Also update entries marked Paused / Dropped on AniList', self)
         self.update_inactive.setChecked(PREFS['update_inactive'])
+        self.auto_prompt = QCheckBox('Offer to sync after Kobo Utilities stores new reading positions', self)
+        self.auto_prompt.setChecked(PREFS['auto_prompt'])
+        layout.addRow('', self.auto_prompt)
         layout.addRow('', self.count_in_progress)
         layout.addRow('', self.update_inactive)
 
@@ -105,3 +109,4 @@ class ConfigWidget(QWidget):
         PREFS['chapter_column'] = self.chapter.text().strip()
         PREFS['count_in_progress'] = bool(self.count_in_progress.isChecked())
         PREFS['update_inactive'] = bool(self.update_inactive.isChecked())
+        PREFS['auto_prompt'] = bool(self.auto_prompt.isChecked())

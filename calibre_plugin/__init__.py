@@ -7,7 +7,7 @@ class AniListMangaSync(InterfaceActionBase):
                    'plus each volume\'s chapter range. Includes "Link to AniList".')
     supported_platforms = ['windows', 'osx', 'linux']
     author = 'coder-eb'
-    version = (0, 2, 1)
+    version = (0, 3, 0)
     minimum_calibre_version = (5, 0, 0)
     actual_plugin = 'calibre_plugins.anilist_calibre_plugin.action:AniListAction'
 

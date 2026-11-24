@@ -34,6 +34,11 @@ The **AniList** toolbar menu:
   that would be sent (editable, never below what AniList already has), AniList's current chapter, and what
   will happen. **Sync now** pushes the ticked rows and writes each volume's completed chapter to
   `#manga_chapter_read`. Without a token it is a preview only (the column is still filled).
+- **Automatic prompt** - like Goodreads Sync, after Kobo Utilities stores new reading positions the Sync dialog
+  opens by itself, limited to the linked series whose books just changed. It stays silent when there is nothing
+  new for AniList (decided locally, no request), when no token is set, or when switched off in the settings.
+  It hooks Kobo Utilities' `_read_completed` on the running object only (nothing on disk changes); if that
+  plugin changes, the hook does not install and the log says so.
 - **Link to AniList...** - paste `https://anilist.co/manga/<id>/...` for the selected books (empty = remove).
   *Check on AniList* shows which entry you are linking; by default every other volume of the series is
   linked too. The link is saved as an `anilist:<id>` identifier, like Goodreads' `goodreads:<id>`.

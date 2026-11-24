@@ -310,5 +310,30 @@ texts = [a.text() for a in act.menu.actions() if a.text()]
 check(texts[:3] == ['Sync manga progress...', 'Link to AniList...', 'Linked entry'], 'action: menu = %s' % texts)
 check(not act.qaction.icon().isNull(), 'action: the AniList icon is loaded from the zip')
 
+# ---- automatic prompt after Kobo Utilities stores positions ---------------------------------
+from qt.core import QTimer  # noqa: E402
+db2 = LibraryDatabase(lib_path)
+act.gui.current_db = db2
+act._auto_open = False
+calls = []
+act.sync_progress = lambda only_series=None: calls.append(only_series)
+recs2 = library.load_records(db2, library_prefs())
+linked_ids = [r.book_id for r in recs2 if sync.anilist_id_for([r]) and r.series]
+PREFS['pushed'] = {}
+PREFS['auto_prompt'], PREFS['token'] = True, ''
+act._positions_stored(linked_ids[:1]); wait_until(lambda: False, 1.2)
+check(calls == [], 'auto: no token -> no prompt')
+PREFS['token'] = 'abc'
+PREFS['auto_prompt'] = False
+act._positions_stored(linked_ids[:1]); wait_until(lambda: False, 1.2)
+check(calls == [], 'auto: switched off -> no prompt')
+PREFS['auto_prompt'] = True
+act._positions_stored([]); wait_until(lambda: False, 1.2)
+check(calls == [], 'auto: no changed books -> no prompt')
+act._positions_stored(linked_ids); wait_until(lambda: len(calls) > 0, 3)
+check(len(calls) == 1 and calls[0] and all(isinstance(x, str) for x in calls[0]),
+      'auto: new reading progress on linked manga -> prompt for those series only (%s)' % (calls[:1],))
+db2.close()
+
 print('\n%s' % ('ALL PASSED' if not failures else '%d FAILED' % len(failures)))
 sys.exit(1 if failures else 0)

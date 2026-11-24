@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_DIR = ROOT / 'calibre_plugin'
 SHARED_DIR = ROOT / 'anilist_manga_sync'
-SHARED = ['anilist', 'chapters', 'http', 'library', 'links', 'ops', 'planner', 'sync']
+SHARED = ['anilist', 'autosync', 'chapters', 'http', 'library', 'links', 'ops', 'planner', 'sync']
 
 
 def plugin_version():
