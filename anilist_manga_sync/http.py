@@ -7,7 +7,7 @@ so tests (and the Calibre glue) can swap it. The default uses ``urllib``.
 import urllib.error
 import urllib.request
 
-USER_AGENT = 'calibre-anilist-manga-sync/0.1 (+https://github.com/coder-eb/anilist-manga-sync)'
+USER_AGENT = 'anilist-calibre-plugin/0.1 (+https://github.com/coder-eb/anilist-calibre-plugin)'
 
 
 def urllib_transport(method, url, body, headers, timeout=30):

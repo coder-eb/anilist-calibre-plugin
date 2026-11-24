@@ -1,6 +1,9 @@
-# AniList manga sync
+# AniList Calibre plugin
 
 Sync manga reading progress from Calibre to AniList, at **chapter** level.
+
+> **Status:** the command-line tool works today (preview and push). The Calibre menu plugin
+> (a toolbar button with a preview table) is the next step and is not built yet.
 
 How it works:
 

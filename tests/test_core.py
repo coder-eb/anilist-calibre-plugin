@@ -81,7 +81,7 @@ class AniListTests(unittest.TestCase):
         method, url, body, headers = t.calls[0]
         self.assertIn('format_in: [MANGA]', body['query'])
         self.assertEqual(body['variables']['search'], 'Nisekoi')
-        self.assertIn('calibre-anilist-manga-sync', headers['User-Agent'])
+        self.assertIn('anilist-calibre-plugin', headers['User-Agent'])
         self.assertNotIn('Authorization', headers)           # search needs no token
 
     def test_changes_need_a_token(self):
